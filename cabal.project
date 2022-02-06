@@ -1,0 +1,7 @@
+source-repository-package
+  type: git
+  location: https://github.com/0xCM/type-combinators
+  tag: 58167dd4017b666ff592bb9493b0570a054aabdb
+
+packages:
+	hybrids

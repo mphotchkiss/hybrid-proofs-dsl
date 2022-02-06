@@ -1,0 +1,7 @@
+
+" cabal build artifacts
+dist*
+
+" Vim
+*.swp
+*.swo
