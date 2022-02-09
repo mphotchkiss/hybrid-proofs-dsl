@@ -32,6 +32,8 @@ import           Data.Type.Nat
 import           Type.Class.Known
 import           Type.Family.Nat
 import           Type.Family.List
+import           System.IO
+import           System.Exit
 
 type HName = String
 data HVar (size :: N) = HVar HName
@@ -113,17 +115,6 @@ addFnCtx (n:ns) (HArgsArg e args) ctx = do
     return $ hVarDef n bs ctx'
 addFnCtx _      _                 _   = Left "Error: Function call got messed up"
 
-otp8_real :: HTerm
-otp8_real = 
-    Routine "Enc" (HSigArg "k" (HSigArg "m" HSigBase)) (
-        Return (Xor (Variable @N8 $ HVar "k") (Variable $ HVar "m"))
-    )
- :> Gets nat8 (HVar @N8 "key")
- :> Assign (HVar "message") (Literal $ enc8 100)
- :> Return (Call "Enc" (HArgsArg (Variable @N8 $ HVar "key")
-                       (HArgsArg (Variable @N8 $ HVar "message")
-                       (HArgsBase :: HArgs N8 '[]))))
-
 evalHExpr :: HContext -> HExpr n -> Either Error (BitString n)
 evalHExpr ctx (Variable (HVar vName)) =
     hVarLookup ctx vName
@@ -169,7 +160,26 @@ evalHTerm ctx (Return e) = do
 evalHTerm ctx (Routine name sig body) =
     return (hFnDef name sig body ctx, Nothing)
 
-test :: IO ()
-test = do
-    let ones = enc8 255
-    putStrLn (show ones)
+otp_real :: forall n. FromBits n => Nat n -> HTerm
+otp_real size = 
+    Routine "Enc" (HSigArg "k" (HSigArg "m" HSigBase)) (
+        Assign (HVar "res") (Xor (Variable $ HVar @n "k") (Variable $ HVar "m"))
+     :> Return (Variable $ HVar @n "res")
+    )
+ :> Gets size (HVar @n "key")
+ :> Assign (HVar "message") (Literal $ encN size 100)
+ :> Return (Call "Enc" (HArgsArg (Variable $ HVar @n "key")
+                       (HArgsArg (Variable $ HVar @n "message")
+                       (HArgsBase :: HArgs n '[]))))
+
+
+example_otp :: IO ()
+example_otp = do
+    ctx <- emptyCtx
+    case evalHTerm ctx (otp_real nat16) of
+        Left e           -> do
+            hPutStrLn stderr e
+            exitFailure
+        Right (_ctx, bs) -> do
+            putStrLn (show bs)
+            exitSuccess

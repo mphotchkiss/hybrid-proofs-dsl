@@ -22,9 +22,10 @@ module Data.BitString
     , toBits
     , xor
     , append
-    , enc8
-    , nat8
     , bitSingle
+    , nat8
+    , nat16
+    , encN
     ) where
 
 import Control.Applicative
@@ -70,6 +71,9 @@ instance Show (BitString n) => Show (BitString ('S n)) where
 nat8 :: Nat N8
 nat8 = (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ Z_))))))))
 
+nat16 :: Nat (N8 + N8)
+nat16 = (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ Z_))))))))))))))))
+
 xor :: BitString n -> BitString n -> BitString n
 xor (BitString s1) (BitString s2) = BitString $ vap (liftA2 bitXor) s1 s2
 
@@ -96,9 +100,9 @@ toBits :: BitString n -> [Bit]
 toBits (BitString ØV)            = []
 toBits (BitString ((I b) :* bs)) = b : toBits (BitString bs)
 
-enc8 :: Int -> BitString N8
-enc8 n = BitString $ vgen nat8 b
+encN :: Nat n -> Int -> BitString n
+encN size n = BitString $ vgen size b
   where
-    b i = if (shift n (-(7 - fin i))) .&. 1 == 0
+    b i = if (shift n (-((natVal size - 1) - fin i))) .&. 1 == 0
             then pure B0
             else pure B1
