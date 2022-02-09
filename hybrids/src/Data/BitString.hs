@@ -13,24 +13,29 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE IncoherentInstances #-}
 
 module Data.BitString
     ( Bit(..)
+    , bytesToBits
     , BitString(..)
     , FromBits(..)
+    , toBits
     , xor
     , append
     , enc8
+    , nat8
     , bitSingle
     ) where
 
 import Control.Applicative
-import Data.Bits (shift, (.&.))
+import Data.Bits (shift, (.&.), testBit)
+import Data.ByteArray (Bytes, unpack)
+import Data.Foldable
 import Data.Type.Combinator
 import Data.Type.Fin
 import Data.Type.Nat
 import Data.Type.Vector
+import Type.Class.Known
 import Type.Family.Nat
 
 data Bit = B0 | B1
@@ -40,16 +45,23 @@ instance Show Bit where
     show B0 = "0"
     show B1 = "1"
 
-
 bitXor :: Bit -> Bit -> Bit
 bitXor B0 B0 = B0
 bitXor B1 B0 = B1
 bitXor B0 B1 = B1
 bitXor B1 B1 = B0
 
+bytesToBits :: Bytes -> [Bit]
+bytesToBits bs = fold $ map wordToBits $ unpack bs
+  where
+    wordToBits w = map (generate w) [0..7]
+    generate w n = if testBit w n
+                        then B1
+                        else B0
+
 newtype BitString n = BitString {unBitString :: Vec n Bit }
     deriving(Eq)
-instance Show (BitString N0) where
+instance Show (BitString 'Z) where
     show _ = ""
 instance Show (BitString n) => Show (BitString ('S n)) where
     show (BitString ((I bit) :* bs)) =
@@ -68,20 +80,21 @@ bitSingle :: Bit -> BitString N1
 bitSingle b = BitString ((I b) :* ØV)
 
 class FromBits bs where
-    fromBits :: [Bit] -> Maybe bs
+    fromBits :: [Bit] -> Maybe (BitString bs)
 
-instance FromBits (BitString N0) where
+instance FromBits 'Z where
     fromBits []     = Just $ BitString ØV
     fromBits (b:bs) = Nothing
 
-instance FromBits (BitString n) => FromBits (BitString ('S n)) where
+instance FromBits n => FromBits ('S n) where
     fromBits []     = Nothing
     fromBits (b:bs) = do
         rest <- fromBits bs
         return $ append (bitSingle b) rest
 
-instance FromBits (BitString (n :: N)) where
-    fromBits = fromBits
+toBits :: BitString n -> [Bit]
+toBits (BitString ØV)            = []
+toBits (BitString ((I b) :* bs)) = b : toBits (BitString bs)
 
 enc8 :: Int -> BitString N8
 enc8 n = BitString $ vgen nat8 b

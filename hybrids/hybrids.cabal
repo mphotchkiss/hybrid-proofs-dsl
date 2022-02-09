@@ -31,6 +31,8 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base ^>=4.13.0.0
                      , containers
+                     , cryptonite
+                     , memory
                      , type-combinators
 
   -- Directories containing source files.
