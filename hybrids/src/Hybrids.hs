@@ -29,6 +29,7 @@ import qualified Data.Map as M
 import           Data.Proxy
 import           Data.Type.Fin
 import           Data.Type.Nat
+import           Data.Type.Nat.Extra
 import           Type.Class.Known
 import           Type.Family.Nat
 import           Type.Family.List
@@ -176,7 +177,7 @@ otp_real size =
 example_otp :: IO ()
 example_otp = do
     ctx <- emptyCtx
-    case evalHTerm ctx (otp_real nat16) of
+    case evalHTerm ctx (otp_real nat128) of
         Left e           -> do
             hPutStrLn stderr e
             exitFailure

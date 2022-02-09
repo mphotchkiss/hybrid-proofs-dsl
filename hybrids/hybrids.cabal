@@ -21,6 +21,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     Hybrids
                      , Data.BitString
+                     , Data.Type.Nat.Extra
 
   -- Modules included in this library but not exported.
   -- other-modules:

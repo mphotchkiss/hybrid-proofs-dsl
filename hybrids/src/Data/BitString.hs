@@ -23,8 +23,6 @@ module Data.BitString
     , xor
     , append
     , bitSingle
-    , nat8
-    , nat16
     , encN
     ) where
 
@@ -67,12 +65,6 @@ instance Show (BitString 'Z) where
 instance Show (BitString n) => Show (BitString ('S n)) where
     show (BitString ((I bit) :* bs)) =
         show bit ++ show (BitString bs)
-
-nat8 :: Nat N8
-nat8 = (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ Z_))))))))
-
-nat16 :: Nat (N8 + N8)
-nat16 = (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ (S_ Z_))))))))))))))))
 
 xor :: BitString n -> BitString n -> BitString n
 xor (BitString s1) (BitString s2) = BitString $ vap (liftA2 bitXor) s1 s2
