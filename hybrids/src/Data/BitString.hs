@@ -20,6 +20,7 @@ module Data.BitString
     , BitString(..)
     , FromBits(..)
     , toBits
+    , ppBits
     , xor
     , append
     , bitSingle
@@ -34,7 +35,6 @@ import Data.Type.Combinator
 import Data.Type.Fin
 import Data.Type.Nat
 import Data.Type.Vector
-import Type.Class.Known
 import Type.Family.Nat
 
 data Bit = B0 | B1
@@ -58,6 +58,10 @@ bytesToBits bs = fold $ map wordToBits $ unpack bs
                         then B1
                         else B0
 
+ppBits :: [Bit] -> String
+ppBits []     = ""
+ppBits (b:bs) = show b ++ ppBits bs
+
 newtype BitString n = BitString {unBitString :: Vec n Bit }
     deriving(Eq)
 instance Show (BitString 'Z) where
@@ -80,7 +84,7 @@ class FromBits bs where
 
 instance FromBits 'Z where
     fromBits []     = Just $ BitString ØV
-    fromBits (b:bs) = Nothing
+    fromBits _      = Nothing
 
 instance FromBits n => FromBits ('S n) where
     fromBits []     = Nothing

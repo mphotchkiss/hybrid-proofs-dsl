@@ -1,43 +1,31 @@
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeApplications #-}
-
-module Hybrids where
+module Language.Hybrids.AST
+    ( HName
+    , HVar(..)
+    , HExpr(..)
+    , HArgs(..)
+    , HTerm(..)
+    , HSig(..)
+    , Error
+    , FromBits(..)
+    , HContext
+    , emptyCtx
+    , evalHExpr
+    , evalHTerm
+    ) where
 
 import           Crypto.Random
 import           Data.BitString
-import           Data.Kind (Type)
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Proxy
-import           Data.Type.Fin
 import           Data.Type.Nat
-import           Data.Type.Nat.Extra
-import           Type.Class.Known
 import           Type.Family.Nat
 import           Type.Family.List
-import           System.IO
-import           System.Exit
 
 type HName = String
 data HVar (size :: N) = HVar HName
+
+instance Show (HVar n) where
+    show (HVar name) = name
 
 data HExpr (size :: N) where
     Variable    :: FromBits n => HVar n -> HExpr n
@@ -46,9 +34,21 @@ data HExpr (size :: N) where
     Append      :: HExpr a -> HExpr b -> HExpr (a + b)
     Call        :: FromBits n => HName -> HArgs n as -> HExpr n
 
+instance Show (HExpr n) where
+    show (Variable (HVar name)) = name
+    show (Literal bs)           = "0b" ++ ppBits (toBits bs)
+    show (Xor e1 e2)            = show e1 ++ " (+) " ++ show e2
+    show (Append e1 e2)         = show e1 ++ " || " ++ show e2
+    show (Call name args)       = name ++ "(" ++ show args ++ ")"
+
 data HArgs (ret :: N) (as :: [N]) where
     HArgsBase :: HArgs n '[]
     HArgsArg  :: FromBits m => HExpr m -> HArgs n as -> HArgs n (m :< as)
+
+instance Show (HArgs r as) where
+    show HArgsBase              = ""
+    show (HArgsArg e HArgsBase) = show e
+    show (HArgsArg e a)         = show e ++ ", " ++ show a
 
 data HTerm where
     Assign   :: HVar n -> HExpr n -> HTerm
@@ -57,13 +57,34 @@ data HTerm where
     Return   :: HExpr n -> HTerm
     Routine  :: HName -> HSig n as -> HTerm -> HTerm
 
+instance Show HTerm where
+    show = printHTerm 0
+
 data HSig (ret :: N) (argc :: N) where
-    HSigBase :: HSig n Z
-    HSigArg  :: HName -> HSig n c -> HSig n (S c)
+    HSigBase :: HSig n 'Z
+    HSigArg  :: HName -> HSig n c -> HSig n ('S c)
+
+instance Show (HSig r c) where
+    show HSigBase             = ""
+    show (HSigArg e HSigBase) = e
+    show (HSigArg e a)        = e ++ ", " ++ show a
 
 sigArgs :: HSig n c -> [HName]
 sigArgs HSigBase          = []
 sigArgs (HSigArg name as) = name : sigArgs as
+
+printHTerm :: Int -> HTerm -> String
+printHTerm lvl (Assign v e)  =
+  replicate lvl '\t' ++ show v ++ " := " ++ show e
+printHTerm lvl (Gets bits v) =
+  replicate lvl '\t' ++ show v ++ " <- {0, 1}^" ++ show (natVal bits)
+printHTerm lvl ((:>) t1 t2)  =
+  printHTerm lvl t1 ++ ";\n" ++ printHTerm lvl t2
+printHTerm lvl (Return e)    =
+  replicate lvl '\t' ++ "return " ++ show e
+printHTerm lvl (Routine name args body) =
+  replicate lvl '\t' ++ "def " ++ name ++ "(" ++ show args ++ "):\n"
+                     ++ printHTerm (lvl + 1) body
 
 type HVarContext = Map HName [Bit]
 type HFnContext = Map HName ([HName], HTerm)
@@ -119,7 +140,7 @@ addFnCtx _      _                 _   = Left "Error: Function call got messed up
 evalHExpr :: HContext -> HExpr n -> Either Error (BitString n)
 evalHExpr ctx (Variable (HVar vName)) =
     hVarLookup ctx vName
-evalHExpr ctx (Literal bs)   =
+evalHExpr _ctx (Literal bs)   =
     Right bs
 evalHExpr ctx (Xor e1 e2)    = do
     b1 <- evalHExpr ctx e1
@@ -160,27 +181,3 @@ evalHTerm ctx (Return e) = do
     pure (ctx, Just $ toBits bs)
 evalHTerm ctx (Routine name sig body) =
     return (hFnDef name sig body ctx, Nothing)
-
-otp_real :: forall n. FromBits n => Nat n -> HTerm
-otp_real size = 
-    Routine "Enc" (HSigArg "k" (HSigArg "m" HSigBase)) (
-        Assign (HVar "res") (Xor (Variable $ HVar @n "k") (Variable $ HVar "m"))
-     :> Return (Variable $ HVar @n "res")
-    )
- :> Gets size (HVar @n "key")
- :> Assign (HVar "message") (Literal $ encN size 100)
- :> Return (Call "Enc" (HArgsArg (Variable $ HVar @n "key")
-                       (HArgsArg (Variable $ HVar @n "message")
-                       (HArgsBase :: HArgs n '[]))))
-
-
-example_otp :: IO ()
-example_otp = do
-    ctx <- emptyCtx
-    case evalHTerm ctx (otp_real nat128) of
-        Left e           -> do
-            hPutStrLn stderr e
-            exitFailure
-        Right (_ctx, bs) -> do
-            putStrLn (show bs)
-            exitSuccess

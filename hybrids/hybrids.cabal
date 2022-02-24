@@ -19,7 +19,9 @@ extra-source-files:  CHANGELOG.md
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Hybrids
+  exposed-modules:     Language.Hybrids.AST
+                     , Language.Hybrids.Examples
+                     , Language.Hybrids.Transform
                      , Data.BitString
                      , Data.Type.Nat.Extra
 
@@ -27,7 +29,26 @@ library
   -- other-modules:
 
   -- LANGUAGE extensions used by modules in this package.
-  -- other-extensions:
+  default-extensions:  TypeFamilyDependencies
+                     , PatternSynonyms
+                     , ConstraintKinds
+                     , RankNTypes
+                     , StandaloneDeriving
+                     , FlexibleInstances
+                     , FunctionalDependencies
+                     , UndecidableInstances
+                     , TypeFamilies
+                     , LambdaCase
+                     , TypeOperators
+                     , KindSignatures
+                     , DataKinds
+                     , PolyKinds
+                     , GADTs
+                     , FlexibleContexts
+                     , ScopedTypeVariables
+                     , AllowAmbiguousTypes
+                     , TypeApplications
+
 
   -- Other library packages from which modules are imported.
   build-depends:       base ^>=4.13.0.0
@@ -41,4 +62,6 @@ library
 
   -- Base language which the package is written in.
   default-language:    Haskell2010
+
+  ghc-options: -Wall -Werror
 
