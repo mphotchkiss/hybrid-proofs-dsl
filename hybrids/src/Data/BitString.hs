@@ -1,18 +1,5 @@
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies         #-}
 
 module Data.BitString
     ( Bit(..)
@@ -60,7 +47,8 @@ instance Show BitString where
         show bit ++ show (BitString bs)
 
 newtype BitWidth = BitWidth Int
-    deriving(Show, Eq, Ord)
+    deriving(Eq, Ord)
+    deriving newtype Show 
 
 bits8 :: BitWidth
 bits8 = BitWidth 8

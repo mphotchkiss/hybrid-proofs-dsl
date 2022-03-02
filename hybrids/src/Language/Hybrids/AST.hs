@@ -42,7 +42,7 @@ newtype HArgs = HArgs [HExpr]
 instance Show HArgs where
     show (HArgs [])     = ""
     show (HArgs [e])    = show e
-    show (HArgs (e:as)) = show e ++ ", " ++ show as
+    show (HArgs (e:as)) = show e ++ ", " ++ show (HArgs as)
 
 data HTerm where
     Assign   :: HVar -> HExpr -> HTerm
@@ -59,7 +59,7 @@ newtype HSig = HSig { sigArgs :: [HName] }
 instance Show HSig where
     show (HSig [])     = ""
     show (HSig [e])    = e
-    show (HSig (e:as)) = e ++ ", " ++ show as
+    show (HSig (e:as)) = e ++ ", " ++ show (HSig as)
 
 printHTerm :: Int -> HTerm -> String
 printHTerm lvl (Assign v e)  =
