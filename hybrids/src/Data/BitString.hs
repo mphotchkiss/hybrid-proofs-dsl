@@ -16,26 +16,24 @@
 
 module Data.BitString
     ( Bit(..)
-    , bytesToBits
     , BitString(..)
-    , FromBits(..)
-    , toBits
+    , BitWidth(..)
     , ppBits
     , xor
     , append
     , bitSingle
     , encN
+    , bytesToBits
+    , bits8
+    , bits16
+    , bits32
+    , bits64
+    , bits128
     ) where
 
-import Control.Applicative
 import Data.Bits (shift, (.&.), testBit)
 import Data.ByteArray (Bytes, unpack)
 import Data.Foldable
-import Data.Type.Combinator
-import Data.Type.Fin
-import Data.Type.Nat
-import Data.Type.Vector
-import Type.Family.Nat
 
 data Bit = B0 | B1
     deriving(Eq)
@@ -50,6 +48,51 @@ bitXor B1 B0 = B1
 bitXor B0 B1 = B1
 bitXor B1 B1 = B0
 
+ppBits :: [Bit] -> String
+ppBits []     = ""
+ppBits (b:bs) = show b ++ ppBits bs
+
+newtype BitString = BitString { toBits :: [Bit] }
+    deriving(Eq)
+instance Show BitString where
+    show (BitString []) = ""
+    show (BitString (bit:bs)) =
+        show bit ++ show (BitString bs)
+
+newtype BitWidth = BitWidth Int
+    deriving(Show, Eq, Ord)
+
+bits8 :: BitWidth
+bits8 = BitWidth 8
+
+bits16 :: BitWidth
+bits16 = BitWidth 16
+
+bits32 :: BitWidth
+bits32 = BitWidth 32
+
+bits64 :: BitWidth
+bits64 = BitWidth 64
+
+bits128 :: BitWidth
+bits128 = BitWidth 128
+
+xor :: BitString -> BitString -> BitString
+xor (BitString s1) (BitString s2) = BitString $ zipWith bitXor s1 s2
+
+append :: BitString -> BitString -> BitString
+append (BitString s1) (BitString s2) = BitString (s1 ++ s2)
+
+bitSingle :: Bit -> BitString
+bitSingle b = BitString [b]
+
+encN :: BitWidth -> Int -> BitString
+encN (BitWidth size) n = BitString $ map b [1..size]
+  where
+    b i = if (shift n (-((size - 1) - i))) .&. 1 == 0
+            then B0
+            else B1
+
 bytesToBits :: Bytes -> [Bit]
 bytesToBits bs = fold $ map wordToBits $ unpack bs
   where
@@ -57,48 +100,3 @@ bytesToBits bs = fold $ map wordToBits $ unpack bs
     generate w n = if testBit w n
                         then B1
                         else B0
-
-ppBits :: [Bit] -> String
-ppBits []     = ""
-ppBits (b:bs) = show b ++ ppBits bs
-
-newtype BitString n = BitString {unBitString :: Vec n Bit }
-    deriving(Eq)
-instance Show (BitString 'Z) where
-    show _ = ""
-instance Show (BitString n) => Show (BitString ('S n)) where
-    show (BitString ((I bit) :* bs)) =
-        show bit ++ show (BitString bs)
-
-xor :: BitString n -> BitString n -> BitString n
-xor (BitString s1) (BitString s2) = BitString $ vap (liftA2 bitXor) s1 s2
-
-append :: BitString n -> BitString m -> BitString (n + m)
-append (BitString s1) (BitString s2) = BitString (s1 .++ s2)
-
-bitSingle :: Bit -> BitString N1
-bitSingle b = BitString ((I b) :* ØV)
-
-class FromBits bs where
-    fromBits :: [Bit] -> Maybe (BitString bs)
-
-instance FromBits 'Z where
-    fromBits []     = Just $ BitString ØV
-    fromBits _      = Nothing
-
-instance FromBits n => FromBits ('S n) where
-    fromBits []     = Nothing
-    fromBits (b:bs) = do
-        rest <- fromBits bs
-        return $ append (bitSingle b) rest
-
-toBits :: BitString n -> [Bit]
-toBits (BitString ØV)            = []
-toBits (BitString ((I b) :* bs)) = b : toBits (BitString bs)
-
-encN :: Nat n -> Int -> BitString n
-encN size n = BitString $ vgen size b
-  where
-    b i = if (shift n (-((natVal size - 1) - fin i))) .&. 1 == 0
-            then pure B0
-            else pure B1

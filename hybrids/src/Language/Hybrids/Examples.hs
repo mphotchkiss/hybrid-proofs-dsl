@@ -1,29 +1,27 @@
 module Language.Hybrids.Examples where
 
 import Data.BitString
-import Data.Type.Nat
-import Data.Type.Nat.Extra
 import Language.Hybrids.AST
 import System.IO
 import System.Exit
 
-otp_real :: forall n. FromBits n => Nat n -> HTerm
+otp_real :: BitWidth -> HTerm
 otp_real size = 
-    Routine "Enc" (HSigArg "k" (HSigArg "m" HSigBase)) (
-        Assign (HVar "res") (Xor (Variable $ HVar @n "k") (Variable $ HVar "m"))
-     :> Return (Variable $ HVar @n "res")
+    Routine "Enc" (HSig ["k", "m"]) (
+        Assign (HVar "res") (Xor (Variable $ HVar "k") (Variable $ HVar "m"))
+     :> Return (Variable $ HVar "res")
     )
- :> Gets size (HVar @n "key")
+ :> Gets size (HVar "key")
  :> Assign (HVar "message") (Literal $ encN size 100)
- :> Return (Call "Enc" (HArgsArg (Variable $ HVar @n "key")
-                       (HArgsArg (Variable $ HVar @n "message")
-                       (HArgsBase :: HArgs n '[]))))
+ :> Return (Call "Enc" (HArgs [ Variable $ HVar "key"
+                              , Variable $ HVar "message"
+                              ]))
 
 
 example_otp :: IO ()
 example_otp = do
     ctx <- emptyCtx
-    case evalHTerm ctx (otp_real nat128) of
+    case evalHTerm ctx (otp_real bits128) of
         Left e           -> do
             hPutStrLn stderr e
             exitFailure

@@ -23,7 +23,6 @@ library
                      , Language.Hybrids.Examples
                      , Language.Hybrids.Transform
                      , Data.BitString
-                     , Data.Type.Nat.Extra
 
   -- Modules included in this library but not exported.
   -- other-modules:

@@ -49,14 +49,14 @@ inline fName = Inter trans
         fromMaybe term $ replace body term
                | otherwise = term
 
-    containsE :: HExpr n -> Bool
+    containsE :: HExpr -> Bool
     containsE (Variable _)   = False
     containsE (Literal _)    = False
     containsE (Xor e1 e2)    = containsE e1 || containsE e2
     containsE (Append e1 e2) = containsE e1 || containsE e2
     containsE (Call name _)  = name == fName
 
-    replaceE :: HTerm -> HExpr n -> HExpr n
+    replaceE :: HTerm -> HExpr -> HExpr
     replaceE body (Xor e1 e2)         = Xor (replaceE body e1) (replaceE body e2)
     replaceE body (Append e1 e2)      = Append (replaceE body e1) (replaceE body e2)
     replaceE _    call@(Call name _)

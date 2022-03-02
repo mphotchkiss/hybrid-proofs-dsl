@@ -6,7 +6,6 @@ module Language.Hybrids.AST
     , HTerm(..)
     , HSig(..)
     , Error
-    , FromBits(..)
     , HContext
     , emptyCtx
     , evalHExpr
@@ -17,67 +16,56 @@ import           Crypto.Random
 import           Data.BitString
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Type.Nat
-import           Type.Family.Nat
-import           Type.Family.List
 
 type HName = String
-data HVar (size :: N) = HVar HName
+newtype HVar = HVar HName
 
-instance Show (HVar n) where
+instance Show HVar where
     show (HVar name) = name
 
-data HExpr (size :: N) where
-    Variable    :: FromBits n => HVar n -> HExpr n
-    Literal     :: BitString n -> HExpr n
-    Xor         :: HExpr n -> HExpr n -> HExpr n
-    Append      :: HExpr a -> HExpr b -> HExpr (a + b)
-    Call        :: FromBits n => HName -> HArgs n as -> HExpr n
+data HExpr where
+    Variable    :: HVar -> HExpr
+    Literal     :: BitString -> HExpr
+    Xor         :: HExpr -> HExpr -> HExpr
+    Append      :: HExpr -> HExpr -> HExpr
+    Call        :: HName -> HArgs -> HExpr
 
-instance Show (HExpr n) where
+instance Show HExpr where
     show (Variable (HVar name)) = name
     show (Literal bs)           = "0b" ++ ppBits (toBits bs)
     show (Xor e1 e2)            = show e1 ++ " (+) " ++ show e2
     show (Append e1 e2)         = show e1 ++ " || " ++ show e2
     show (Call name args)       = name ++ "(" ++ show args ++ ")"
 
-data HArgs (ret :: N) (as :: [N]) where
-    HArgsBase :: HArgs n '[]
-    HArgsArg  :: FromBits m => HExpr m -> HArgs n as -> HArgs n (m :< as)
+newtype HArgs = HArgs [HExpr]
 
-instance Show (HArgs r as) where
-    show HArgsBase              = ""
-    show (HArgsArg e HArgsBase) = show e
-    show (HArgsArg e a)         = show e ++ ", " ++ show a
+instance Show HArgs where
+    show (HArgs [])     = ""
+    show (HArgs [e])    = show e
+    show (HArgs (e:as)) = show e ++ ", " ++ show as
 
 data HTerm where
-    Assign   :: HVar n -> HExpr n -> HTerm
-    Gets     :: FromBits n => Nat n -> HVar n -> HTerm
+    Assign   :: HVar -> HExpr -> HTerm
+    Gets     :: BitWidth -> HVar -> HTerm
     (:>)     :: HTerm -> HTerm -> HTerm
-    Return   :: HExpr n -> HTerm
-    Routine  :: HName -> HSig n as -> HTerm -> HTerm
+    Return   :: HExpr -> HTerm
+    Routine  :: HName -> HSig -> HTerm -> HTerm
 
 instance Show HTerm where
     show = printHTerm 0
 
-data HSig (ret :: N) (argc :: N) where
-    HSigBase :: HSig n 'Z
-    HSigArg  :: HName -> HSig n c -> HSig n ('S c)
+newtype HSig = HSig { sigArgs :: [HName] }
 
-instance Show (HSig r c) where
-    show HSigBase             = ""
-    show (HSigArg e HSigBase) = e
-    show (HSigArg e a)        = e ++ ", " ++ show a
-
-sigArgs :: HSig n c -> [HName]
-sigArgs HSigBase          = []
-sigArgs (HSigArg name as) = name : sigArgs as
+instance Show HSig where
+    show (HSig [])     = ""
+    show (HSig [e])    = e
+    show (HSig (e:as)) = e ++ ", " ++ show as
 
 printHTerm :: Int -> HTerm -> String
 printHTerm lvl (Assign v e)  =
   replicate lvl '\t' ++ show v ++ " := " ++ show e
 printHTerm lvl (Gets bits v) =
-  replicate lvl '\t' ++ show v ++ " <- {0, 1}^" ++ show (natVal bits)
+  replicate lvl '\t' ++ show v ++ " <- {0, 1}^" ++ show bits
 printHTerm lvl ((:>) t1 t2)  =
   printHTerm lvl t1 ++ ";\n" ++ printHTerm lvl t2
 printHTerm lvl (Return e)    =
@@ -86,7 +74,7 @@ printHTerm lvl (Routine name args body) =
   replicate lvl '\t' ++ "def " ++ name ++ "(" ++ show args ++ "):\n"
                      ++ printHTerm (lvl + 1) body
 
-type HVarContext = Map HName [Bit]
+type HVarContext = Map HName BitString
 type HFnContext = Map HName ([HName], HTerm)
 
 data HContext = 
@@ -105,20 +93,18 @@ emptyCtx = do
     sDrg <- getSystemDRG
     return $ HContext M.empty M.empty sDrg
 
-hVarDef :: HName -> BitString n -> HContext -> HContext
+hVarDef :: HName -> BitString -> HContext -> HContext
 hVarDef name val ctx = ctx { ctxVars = vars' }
   where
-    vars' = M.insert name (toBits val) (ctxVars ctx)
+    vars' = M.insert name val (ctxVars ctx)
 
-hVarLookup :: FromBits n => HContext -> HName -> Either Error (BitString n)
+hVarLookup :: HContext -> HName -> Either Error BitString
 hVarLookup ctx name =
     case M.lookup name $ ctxVars ctx of
-        Just bs -> case fromBits bs of
-                     Just str -> Right str
-                     Nothing  -> Left ("Error: Variable size mismatch")
+        Just bs -> Right bs
         Nothing -> Left ("Error: Variable " <> name <> " used before defintion")
 
-hFnDef :: HName -> HSig ret c -> HTerm -> HContext -> HContext
+hFnDef :: HName -> HSig -> HTerm -> HContext -> HContext
 hFnDef name sig body ctx = ctx { ctxFns = fns' }
   where
     fns' = M.insert name (sigArgs sig, body) $ ctxFns ctx
@@ -129,15 +115,15 @@ hFnLookup ctx name =
         Just fn -> Right fn
         Nothing -> Left ("Error: Function " <> name <> " used before definition")
 
-addFnCtx :: [HName] -> HArgs r as -> HContext -> Either Error HContext
-addFnCtx []     HArgsBase         ctx = Right ctx
-addFnCtx (n:ns) (HArgsArg e args) ctx = do
+addFnCtx :: [HName] -> HArgs -> HContext -> Either Error HContext
+addFnCtx []     (HArgs [])       ctx = Right ctx
+addFnCtx (n:ns) (HArgs (e:args)) ctx = do
     bs <- evalHExpr ctx e
-    ctx' <- addFnCtx ns args ctx
+    ctx' <- addFnCtx ns (HArgs args) ctx
     return $ hVarDef n bs ctx'
 addFnCtx _      _                 _   = Left "Error: Function call got messed up"
 
-evalHExpr :: HContext -> HExpr n -> Either Error (BitString n)
+evalHExpr :: HContext -> HExpr -> Either Error BitString
 evalHExpr ctx (Variable (HVar vName)) =
     hVarLookup ctx vName
 evalHExpr _ctx (Literal bs)   =
@@ -155,22 +141,18 @@ evalHExpr ctx (Call fnm args) = do
     ctx' <- addFnCtx vs args ctx
     (_ctx, mBs) <- evalHTerm ctx' f
     case mBs of
-        Just bs -> case fromBits bs of
-            Just bstr -> return bstr
-            Nothing   -> Left "Error: function return size mismatch."
+        Just bs -> return bs
         Nothing -> Left ("Error: function " <> fnm <> " did not return.")
 
-evalHTerm :: HContext -> HTerm -> Either Error (HContext, Maybe [Bit])
+evalHTerm :: HContext -> HTerm -> Either Error (HContext, Maybe BitString)
 evalHTerm ctx (Assign (HVar name) e) = do
     bs <- evalHExpr ctx e
     return (hVarDef name bs ctx, Nothing)
-evalHTerm ctx (Gets n var) =
-    let (bs, g') = randomBytesGenerate ((natVal n `div` 8) + 1) (ctxRand ctx)
-    in case fromBits $ take (natVal n) $ bytesToBits bs of
-        Nothing      -> Left "Error: gets size mismatch"
-        Just bString -> do
-            (ctx', _) <- evalHTerm ctx (Assign var (Literal bString))
-            return (ctx' { ctxRand = g' }, Nothing)
+evalHTerm ctx (Gets (BitWidth n) var) = do
+    let (bs, g') = randomBytesGenerate ((n `div` 8) + 1) (ctxRand ctx)
+        bString = BitString $ take n $ bytesToBits bs
+    (ctx', _) <- evalHTerm ctx (Assign var (Literal bString))
+    return (ctx' { ctxRand = g' }, Nothing)
 evalHTerm ctx ((:>) t1 t2) = do
     (ctx', res) <- evalHTerm ctx t1
     case res of
@@ -178,6 +160,6 @@ evalHTerm ctx ((:>) t1 t2) = do
         Just r  -> return (ctx', Just r)
 evalHTerm ctx (Return e) = do
     bs <- evalHExpr ctx e
-    pure (ctx, Just $ toBits bs)
+    pure (ctx, Just bs)
 evalHTerm ctx (Routine name sig body) =
     return (hFnDef name sig body ctx, Nothing)
