@@ -5,17 +5,23 @@ module Language.Hybrids.AST
     , HArgs(..)
     , HTerm(..)
     , HSig(..)
+    , Routine(..)
+    , Block(..)
+    , Library(..)
     , Error
     , HContext
     , emptyCtx
     , evalHExpr
     , evalHTerm
+    , call
     ) where
 
 import           Crypto.Random
 import           Data.BitString
 import           Data.Map (Map)
 import qualified Data.Map as M
+import System.IO
+import System.Exit
 
 type HName = String
 newtype HVar = HVar HName
@@ -61,6 +67,31 @@ instance Show HSig where
     show (HSig [e])    = e
     show (HSig (e:as)) = e ++ ", " ++ show (HSig as)
 
+data Routine where
+    Rout :: Maybe HTerm -> HName -> HSig -> HTerm -> Routine
+
+instance Show Routine where
+    show (Rout Nothing name sig term) = name ++ "(" ++ show sig ++ ")" ++ "\n" ++ printHTerm 1 term
+    show (Rout pre name sig term) = show pre ++ name ++ "(" ++ show sig ++ ")" ++ "\n" ++ printHTerm 1 term
+
+newtype Block = Block [Routine]
+
+instance Show Block where
+    show (Block []) = ""
+    show (Block [r]) = show r
+    show (Block (r:rs)) = show r ++ show rs
+
+data Library where
+    Lib :: HName -> Block -> Maybe Block -> Library
+
+instance Show Library where
+    show (Lib name main Nothing) = "L_" ++ name ++ "\n" ++ show main
+    show (Lib name main (Just sub)) = "L_" ++ name ++ "\n" ++ show main ++ "\n" ++ subroutines sub
+
+subroutines :: Block -> String
+subroutines (Block []) = ""
+subroutines (Block (x:xs)) = "◇" ++ show x ++ subroutines (Block xs)
+
 printHTerm :: Int -> HTerm -> String
 printHTerm lvl (Assign v e)  =
   replicate lvl '\t' ++ show v ++ " := " ++ show e
@@ -77,7 +108,7 @@ printHTerm lvl (Routine name args body) =
 type HVarContext = Map HName BitString
 type HFnContext = Map HName ([HName], HTerm)
 
-data HContext = 
+data HContext =
      HContext { ctxVars :: HVarContext
               , ctxFns  :: HFnContext
               , ctxRand :: SystemDRG
@@ -115,7 +146,7 @@ hFnLookup ctx name =
         Just fn -> Right fn
         Nothing -> Left ("Error: Function " <> name <> " used before definition")
 
-addFnCtx :: [HName] -> HArgs -> HContext -> Either Error HContext
+addFnCtx :: [HName] -> HArgs -> HContext -> Either Error HContext  
 addFnCtx []     (HArgs [])       ctx = Right ctx
 addFnCtx (n:ns) (HArgs (e:args)) ctx = do
     bs <- evalHExpr ctx e
@@ -163,3 +194,45 @@ evalHTerm ctx (Return e) = do
     pure (ctx, Just bs)
 evalHTerm ctx (Routine name sig body) =
     return (hFnDef name sig body ctx, Nothing)
+
+findRout :: Block -> String -> Maybe HTerm
+findRout (Block []) _ = Nothing
+findRout (Block ((Rout (Just a) n b c):xs)) name =
+    if n == name then Just (Routine n b (a :> c))
+    else findRout (Block xs) name
+findRout (Block ((Rout Nothing  n b c):xs)) name =
+    if n == name then Just (Routine n b c)
+    else findRout (Block xs) name
+
+callRout :: HTerm -> Maybe HTerm -> IO()
+callRout req Nothing = hPutStrLn stderr "Method not found"
+callRout req (Just rout) = do
+    ctx <- emptyCtx
+    case evalHTerm ctx rout of
+        Left e -> do
+            hPutStrLn stderr e
+            exitFailure
+        Right (_ctx, b)-> do
+            case evalHTerm _ctx req of
+                Left e -> do
+                    hPutStrLn stderr e
+                    exitFailure
+                Right (_ctx, bs)-> do
+                    print (show bs)
+                    exitSuccess
+            exitSuccess
+
+call :: String -> [(String, Int, BitWidth)] -> Library -> IO()
+call name args (Lib n block blk) = callRout (fnctCall name args) (findRout block name)
+
+fnctCall :: String -> [(String, Int, BitWidth)] -> HTerm
+fnctCall name [] = Return(Call name (HArgs []))
+fnctCall name vars = generateAssignments vars :> Return(Call name (HArgs (generateArgs vars)))
+
+generateAssignments :: [(String, Int, BitWidth)] -> HTerm
+generateAssignments [(s,i,b)] = Assign (HVar s) (Literal (encN b i))
+generateAssignments ((s,i,b):ss) = Assign (HVar s) (Literal (encN b i)) :> generateAssignments ss
+
+generateArgs :: [(String, Int, BitWidth)] -> [HExpr]
+generateArgs [] = []
+generateArgs ((s,i,b):ss) = Variable (HVar s) : generateArgs ss
