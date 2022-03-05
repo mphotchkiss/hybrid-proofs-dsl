@@ -17,3 +17,12 @@ otpReal size =
             :> Return (Variable $ HVar "c")
         )
     ]) Nothing
+
+otpRand :: BitWidth -> Library 
+otpRand size = 
+    Lib "otp-rand" (Block [Rout Nothing "EAVESDROP" (HSig ["m"])
+        (
+            Gets size (HVar "c")
+            :> Return (Variable $ HVar "c")
+        )
+    ]) Nothing
