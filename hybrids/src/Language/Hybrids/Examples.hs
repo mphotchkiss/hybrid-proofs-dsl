@@ -37,3 +37,13 @@ loopEx (BitWidth n) =
             :> Return (Variable $ HVar "c")
         )
     ]) Nothing
+
+ifEx :: BitWidth -> Library
+ifEx (BitWidth n) = 
+    Lib "if-ex" (Block [Rout Nothing "CTXT" (HSig ["m1", "m2"])
+        (
+            If (Eq (Variable $ HVar "m1") (Variable $ HVar "m2")) (Gets (BitWidth n) (HVar "c")
+            )
+            :> Return (Variable $ HVar "c")
+        )
+    ]) Nothing
