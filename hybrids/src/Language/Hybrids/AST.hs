@@ -3,6 +3,7 @@ module Language.Hybrids.AST
     , HVar(..)
     , HExpr(..)
     , HArgs(..)
+    , Bound(..)
     , HTerm(..)
     , HSig(..)
     , Routine(..)
@@ -50,12 +51,19 @@ instance Show HArgs where
     show (HArgs [e])    = show e
     show (HArgs (e:as)) = show e ++ ", " ++ show (HArgs as)
 
+newtype Bound = Bound (Either Int HVar)
+
+instance Show Bound where
+    show (Bound (Left n)) = show n
+    show (Bound (Right v)) = show v
+
 data HTerm where
     Assign   :: HVar -> HExpr -> HTerm
     Gets     :: BitWidth -> HVar -> HTerm
     (:>)     :: HTerm -> HTerm -> HTerm
     Return   :: HExpr -> HTerm
     Routine  :: HName -> HSig -> HTerm -> HTerm
+    Loop     :: Bound -> Bound -> HTerm -> HTerm
 
 instance Show HTerm where
     show = printHTerm 0
@@ -104,6 +112,8 @@ printHTerm lvl (Return e)    =
 printHTerm lvl (Routine name args body) =
   replicate lvl '\t' ++ "def " ++ name ++ "(" ++ show args ++ "):\n"
                      ++ printHTerm (lvl + 1) body
+printHTerm lvl (Loop b1 b2 t) = 
+  replicate lvl '\t' ++ "for i = " ++ show b1 ++ " to " ++ show b2 ++ ":\n" ++ printHTerm (lvl+1) t
 
 type HVarContext = Map HName BitString
 type HFnContext = Map HName ([HName], HTerm)
@@ -276,6 +286,8 @@ bodyToLatex lvl ((:>) t1 t2)  =
   bodyToLatex lvl t1 ++ "\\\\\n" ++ bodyToLatex lvl t2
 bodyToLatex lvl (Return e)    =
   (duplicateStr "\\>" lvl) ++ " return $" ++ exprToLatex e ++ "$"
+bodyToLatex lvl (Loop b1 b2 t) =
+  (duplicateStr "\\>" lvl) ++ " for $i=" ++ show b1 ++ "$ to $" ++ show b2 ++ "$:\\\\\n" ++ bodyToLatex (lvl+1) t
 
 duplicateStr :: String -> Int -> String
 duplicateStr _ 0 = ""
