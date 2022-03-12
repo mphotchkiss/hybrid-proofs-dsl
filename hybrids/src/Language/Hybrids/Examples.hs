@@ -27,23 +27,20 @@ otpRand size =
         )
     ]) Nothing
 
-loopEx :: BitWidth -> Library 
-loopEx (BitWidth n) = 
-    Lib "loop-ex" (Block [Rout Nothing "CTXT" (HSig ["m"])
+prgReal :: BitWidth -> Library
+prgReal size =
+    Lib "prg-real" (Block [Rout Nothing "QUERY" (HSig [])
         (
-            Loop (Bound $ Right $ HVar "i") (Bound (Left n)) (
-                Gets (BitWidth n) (HVar "c_i")
-            )
-            :> Return (Variable $ HVar "c")
+            Gets size (HVar "s")
+            :> Return (Call "G" (HArgs [Variable (HVar "s")]))
         )
     ]) Nothing
 
-ifEx :: BitWidth -> Library
-ifEx (BitWidth n) = 
-    Lib "if-ex" (Block [Rout Nothing "CTXT" (HSig ["m1", "m2"])
+prgRand :: BitWidth -> Library 
+prgRand (BitWidth n) = 
+    Lib "prg-rand" (Block [Rout Nothing "QUERY" (HSig [])
         (
-            If (Eq (Variable $ HVar "m1") (Variable $ HVar "m2")) (Gets (BitWidth n) (HVar "c")
-            )
-            :> Return (Variable $ HVar "c")
+            Gets (BitWidth (n*2)) (HVar "r")
+            :> Return (Variable $ HVar "r")
         )
     ]) Nothing
