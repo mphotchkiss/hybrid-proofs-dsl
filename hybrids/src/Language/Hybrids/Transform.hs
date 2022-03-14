@@ -67,9 +67,9 @@ inline fName = Inter trans
     replaceE :: HTerm -> HExpr -> HExpr
     replaceE body (Xor e1 e2)         = Xor (replaceE body e1) (replaceE body e2)
     replaceE body (Append e1 e2)      = Append (replaceE body e1) (replaceE body e2)
-    replaceE _    call@(Call name _)
+    replaceE _    c@(Call name _)
         | name == fName = Variable (HVar $ map toLower fName)
-        | otherwise     = call
+        | otherwise     = c
     replaceE _    e                   = e
 
     rewriteCtx :: HSig -> HArgs -> Map HName HExpr

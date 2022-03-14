@@ -1,8 +1,6 @@
 module Language.Hybrids.Examples where
 
 import Data.BitString
-import System.IO
-import System.Exit
 import Language.Hybrids.AST
 
 callOtp :: BitWidth -> Int -> IO ()
