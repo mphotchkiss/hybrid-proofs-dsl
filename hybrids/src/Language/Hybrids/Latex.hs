@@ -1,12 +1,21 @@
 module Language.Hybrids.Latex where
 
 import Data.BitString
+import Data.Text(replace, unpack, pack)
 import Language.Hybrids.AST
+    ( Library(..),
+      Block(..),
+      Routine(..),
+      HTerm(If, Assign, Gets, (:>), Return, Loop),
+      HExpr(Append, Variable, Literal, Xor),
+      HVar(HVar),
+      Boolean(..) )
+import qualified Data.Functor as String
 
 libToLatex :: Library -> IO ()
 libToLatex (Lib name block _blk) =
     putStrLn ( "\\[\n"
-            ++ "\\titlecodebox{$\\lib{" ++ name ++ "}^\\Sigma$}{\n"
+            ++ "\\titlecodebox{$\\lib{" ++ unpack (replace (pack "$") (pack "\\$") (pack name)) ++ "}^\\Sigma$}{\n"
             ++ blockToLatex block ++ "\n}"
             ++ "\n\\]")
 
@@ -26,7 +35,7 @@ subToLatex rout = "\\link\n"
 
 routToLatex :: Routine -> String 
 routToLatex (Rout (Just initial) name sigs body) =
-    bodyToLatex 0 initial
+    bodyToLatex 0 initial ++ "\\\\\n"
  ++ "\\underline{$\\subname{" ++ name ++ "}(" ++ show sigs ++ ")$:} \\\\\n"
  ++ bodyToLatex 1 body
 routToLatex (Rout Nothing name sigs body) =
@@ -61,7 +70,7 @@ exprToLatex (Append e1 e2) = exprToLatex e1 ++ " \\| " ++ exprToLatex e2
 exprToLatex c = show c
 
 bitsToLatex :: BitWidth -> String 
-bitsToLatex (BitWidth n) = "\\bits^" ++ show n
+bitsToLatex (BitWidth n) = "\\bits^" ++ "{" ++ show n ++ "}"
 
 boolToLatex :: Boolean -> String 
 boolToLatex (Eq expr1 expr2) = exprToLatex expr1 ++ " == " ++ exprToLatex expr2

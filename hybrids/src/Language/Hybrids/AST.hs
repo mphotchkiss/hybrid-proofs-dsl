@@ -104,7 +104,7 @@ instance Show Routine where
     show (Rout Nothing name sig term) =
         name ++ "(" ++ show sig ++ "):" ++ "\n" ++ printHTerm 1 term
     show (Rout pre name sig term) =
-        show pre ++ name ++ "(" ++ show sig ++ "):" ++ "\n" ++ printHTerm 1 term
+        show pre ++ "\n" ++ name ++ "(" ++ show sig ++ "):" ++ "\n" ++ printHTerm 1 term
 
 newtype Block = Block [Routine]
 
