@@ -3,7 +3,7 @@
 
 ## Overview
 
-hybrids is a language for writing and manipulating hybrid proofs.
+hybrids is a language for writing and manipulating hybrid proofs. Please review the report.pdf for project details
 
 ## Tooling
 
